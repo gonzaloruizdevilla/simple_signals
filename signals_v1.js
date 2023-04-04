@@ -69,7 +69,7 @@ const multipliedCount = new Computed(() => count.value * multiplier.value, [coun
 console.log(multipliedCount.value); // 0
 
 count.value = 4;
-console.log(multipliedCount.value); // 2
+console.log(multipliedCount.value); // 8
 
 multiplier.value = 5;
-console.log(multipliedCount.value); // 3
+console.log(multipliedCount.value); // 20
