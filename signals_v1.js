@@ -25,9 +25,6 @@ class Signal {
     this._dependents.add(dependent);
   }
 
-  _removeDependent(dependent) {
-    this._dependents.delete(dependent);
-  }
 }
 
 
@@ -59,11 +56,6 @@ class Computed {
       this._isStale = true;
     }
   
-    dispose() {
-      for (const dependency of this._dependencies) {
-        dependency._removeDependent(this);
-      }
-    }
   }
   
 
