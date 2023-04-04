@@ -27,10 +27,6 @@ class Signal {
     }
   }
 
-  _removeDependent(computed) {
-    this._dependents = this._dependents.filter((dep) => dep !== computed);
-  }
-
   _notifyDependents() {
     for (const dependent of this._dependents) {
       dependent._update();
