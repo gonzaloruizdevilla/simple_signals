@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signals TODO App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 2rem;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Signals TODO App</h1>
+  <form id="todoForm">
+    <input type="text" id="todoInput" placeholder="Add a new task" />
+    <button type="submit">Add</button>
+  </form>
+  <h2>Tasks</h2>
+  <div id="taskFilter">
+    <label><input type="radio" name="filter" value="all" checked /> All</label>
+    <label><input type="radio" name="filter" value="active" /> Active</label>
+    <label><input type="radio" name="filter" value="completed" /> Completed</label>
+  </div>
+  <ul id="todoList"></ul>
+  <div id="taskCounter"></div>
+
+  <script>
+    // Include the Signals library code here
+    // Global variable to keep track of the currently accessed computed or effect
+    let currentAccessed = null;
+    const effectQueue = [];
+
+
+    class Signal {
+        constructor(initialValue) {
+            this._value = initialValue;
+            this._dependents = [];
+        }
+
+        get value() {
+            if (currentAccessed) {
+              this._addDependent(currentAccessed);
+            }
+            return this._value;
+        }
+
+        set value(newValue) {
+            if (this._value !== newValue) {
+              this._value = newValue;
+              this._notifyDependents();
+              executeEffects();
+            }
+        }
+
+        _addDependent(dependent) {
+            if (!this._dependents.includes(dependent)) {
+              this._dependents.push(dependent);
+            }
+        }
+
+        _removeDependent(dependent) {
+            this._dependents = this._dependents.filter((dep) => dep !== dependent);
+        }
+
+        _notifyDependents() {
+            for (const dependent of this._dependents) {
+              dependent._update();
+            }
+        }
+    }
+
+    class Computed {
+      constructor(computeFn) {
+        this._computeFn = computeFn;
+        this._value = undefined;
+        this._isStale = true;
+        this._dependents = [];
+      }
+
+      get value() {
+        if (this._isStale) {
+          const previousContext = currentAccessed;
+          currentAccessed = this;
+          this._recomputeValue();
+          currentAccessed = previousContext;
+        }
+        if (currentAccessed) {
+          this._addDependent(currentAccessed);
+        }
+
+        return this._value;
+      }
+
+      _recomputeValue() {
+        this._value = this._computeFn();
+        this._isStale = false;
+      }
+
+      _addDependent(dependent) {
+          if (!this._dependents.includes(dependent)) {
+            this._dependents.push(dependent);
+          }
+      }
+
+
+      _update() {
+        if (!this._isStale) {
+          this._isStale = true;
+          for (const dependent of this._dependents) {
+            dependent._update();
+          }
+        }
+      }
+    }
+
+// Store the current context (a Computed or Effect instance) for dependency tracking
+
+
+    class Effect {
+      constructor(effectFn) {
+        this._effectFn = effectFn;
+        this._isStale = true;
+        this._execute();
+      }
+
+      _execute() {
+        if (this._isStale) {
+          currentAccessed = this;
+          this._effectFn();
+          currentAccessed = null;
+        }
+        this._isStale = false;
+      }
+
+      _update() {
+        if (!this._isStale) {
+          this._isStale = true;
+          effectQueue.push(this);
+        }
+      }
+    }
+
+    function executeEffects() {
+      while (effectQueue.length > 0) {
+        const effect = effectQueue.shift();
+        effect._execute();
+      }
+    }
+
+
+    function createSignal(initialValue) {
+      return new Signal(initialValue);
+    }
+
+    function createComputed(computeFn) {
+      return new Computed(computeFn);
+    }
+
+    function createEffect(effectFn) {
+      return new Effect(effectFn);
+    }
+
+
+    // Application logic
+    const todoForm = document.getElementById("todoForm");
+    const todoInput = document.getElementById("todoInput");
+    const todoList = document.getElementById("todoList");
+    const taskFilter = document.getElementById("taskFilter");
+    const taskCounter = document.getElementById("taskCounter");
+
+    const tasks = createSignal([]);
+    const filter = createSignal("all");
+
+    const filteredTasks = createComputed(() => {
+      const currentFilter = filter.value;
+      const currentTasks = tasks.value;
+
+      if (currentFilter === "all") {
+        return currentTasks;
+      } else if (currentFilter === "active") {
+        return currentTasks.filter((task) => !task.completed);
+      } else {
+        return currentTasks.filter((task) => task.completed);
+      }
+    });
+
+    const taskCount = createComputed(() => {
+      return tasks.value.length;
+    });
+
+    const activeTaskCount = createComputed(() => {
+      return tasks.value.filter((task) => !task.completed).length;
+    });
+
+    const completedTaskCount = createComputed(() => {
+      return tasks.value.filter((task) => task.completed).length;
+    });
+
+    todoForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const taskTitle = todoInput.value.trim();
+      if (taskTitle) {
+        const newTask = { title: taskTitle, completed: false };
+        tasks.value = [...tasks.value, newTask];
+        todoInput.value = "";
+      }
+    });
+
+    taskFilter.addEventListener("change", (event) => {
+      filter.value = event.target.value;
+    });
+
+    createEffect(() => {
+      
+      const currentTasks = filteredTasks.value;
+      todoList.innerHTML = "";
+      currentTasks.forEach((task, index) => {
+        const listItem = document.createElement("li");
+        const label = document.createElement("label");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = task.completed;
+        checkbox.addEventListener("change", () => {
+          tasks.value[index].completed = checkbox.checked;
+          tasks.value = [...tasks.value];
+        });
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(" " + task.title));
+        listItem.appendChild(label);
+        todoList.appendChild(listItem);
+      });
+    });
+
+    createEffect(() => {
+      taskCounter.textContent = `
+        Total: ${taskCount.value}, 
+        Active: ${activeTaskCount.value}, 
+        Completed: ${completedTaskCount.value}
+      `;
+    });
+
+  </script>
+</body>
+</html>
